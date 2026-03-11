@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>강서제일큰약국 - 위치 안내</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; overflow: hidden; }
+        #map { height: 100vh; width: 100vw; background: #f8f9fa; }
+        
+        .search-container {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; width: 92%; max-width: 550px;
+            display: flex; gap: 8px;
+        }
+        #search {
+            flex: 1; padding: 12px 20px; border-radius: 30px;
+            border: 3px solid #007bff; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            font-size: 16px; outline: none;
+        }
+        .search-btn {
+            width: 70px; background: #007bff; border: none; border-radius: 30px;
+            color: white; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex;
+            align-items: center; justify-content: center; font-size: 15px;
+        }
+        .search-btn:active { background: #0056b3; transform: scale(0.95); }
+
+        .leaflet-popup-content-wrapper { border-radius: 15px; width: 340px; padding: 0; overflow: hidden; }
+        .leaflet-popup-content { margin: 0; width: 340px !important; }
+        .popup-header { background: #007bff; color: white; padding: 12px; font-weight: bold; text-align: center; font-size: 16px; }
+        .med-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 350px; overflow-y: auto; padding: 12px; background: #fff; }
+        .med-item { font-size: 13px; padding: 10px 5px; background: #f8f9fa; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid #e9ecef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .med-item:hover { background: #e7f1ff; color: #007bff; border-color: #007bff; font-weight: bold; }
+
+        .detail-view { padding: 20px; text-align: center; }
+        .detail-name { font-size: 22px; font-weight: bold; color: #d63031; margin-bottom: 10px; }
+        /* 노란 강조 박스 유지 및 구역 정보 포함 */
+        .detail-pos { font-size: 18px; background: #fff9db; padding: 15px; border-radius: 10px; border: 2px solid #fab005; color: #856404; font-weight: bold; line-height: 1.4; }
+        .detail-cat-info { font-size: 14px; color: #b07d05; display: block; margin-top: 5px; font-weight: bold; }
+        .btn-back { margin-top: 15px; display: inline-block; cursor: pointer; color: #007bff; font-size: 13px; text-decoration: underline; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="search-container">
+    <input type="text" id="search" placeholder="약 이름 입력..." onkeydown="if(event.key === 'Enter') executeSearch()">
+    <button class="search-btn" onclick="executeSearch()">검색</button>
+</div>
+
+<div id="map"></div>
+
+<script>
+    var pharmacyData = [
+        { "name": "1. 마시는 소화제 음료/쌍화탕", "coords": {"sw": [224, 702], "ne": [254, 992]}, "items": [ {"name": "까스활명수", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "까스명수", "pos": "제일 안쪽 제일 윗줄"},{"name": "베나치오", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "배나치오", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "생록천", "pos": "제일 안쪽 위에서 2번째줄"}, {"name": "평위천", "pos": "제일 안쪽 위에서 2번째줄"}, {"name": "위청수", "pos": "안쪽 위에서 2번째줄"}, {"name": "쌍화탕", "pos": "중간 제일 아랫줄"}, {"name": "원탕", "pos": "중간 웨에서 2번째줄"}, {"name": "광동탕", "pos": "초입 위에서 2번째줄"}, {"name": "십신탕", "pos": "초입 제일 윗줄"} ]},
+        { "name": "1. 드링크(피로회복제)", "coords": {"sw": [185, 700], "ne": [215, 990]}, "items": [ {"name": "박카스", "pos": "오른쪽 아랫줄"}, {"name": "비타500", "pos": "중간 아랫줄"}, {"name": "가네스", "pos": "왼쪽 위에서 2번째줄"}, {"name": "원비디", "pos": "중간 밑에서 2번째줄"} ]},
+        { "name": "3. 어린이 영양제", "coords": {"sw": [336, 708], "ne": [366, 998]}, "items": [ {"name": "텐텐", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "마이타민", "pos": "초입 밑에서 2번째줄"}, {"name": "리퀴드씨엠", "pos": "중간 밑에서 2번째줄"}, {"name": "키크는영양제", "pos": "초입 위에서 2번째줄"}, {"name": "베베락스", "pos": "안쪽 밑에서 2번째줄"} ]},
+        { "name": "4. 반려동물건강", "coords": {"sw": [401, 708], "ne": [431, 998]}, "items": [ {"name": "하트가드, 하트세이버", "pos": "초입 윗줄"}, {"name": "임팩트", "pos": "초입 밑에서 2번째줄"}, {"name": "개시딘", "pos": "중간 3번째줄"}, {"name": "동물구충제, 파라캅, 파나쿠어", "pos": "초입 제일 아랫줄"}, {"name": "옴니쿠어", "pos": "중간 제일 아랫줄"}, {"name": "동물영양제", "pos": "중간 밑에서 2번째줄"}, {"name": "귀세정제, 점이액", "pos": "중간 위에서 2번째줄"}, {"name": "알파헥시딘", "pos": "중간 위에서 2번째줄"} ]},
+        { "name": "5. 임신부/철분/생리/피임", "coords": {"sw": [440, 706], "ne": [470, 996]}, "items": [ {"name": "임산부영양제", "pos": "초입 전체"}, {"name": "철분제", "pos": "중간 전체"}, {"name": "경구피임약", "pos": "제일 안쪽 윗줄"}, {"name": "생리통약", "pos": "안쪽 전체"}, {"name": "진경제", "pos": "안쪽 아랫줄"}, {"name": "요비신, 방광염약", "pos": "중간 윗줄"} ]},
+        { "name": "6. 항산화제/미용/여성용품", "coords": {"sw": [511, 708], "ne": [541, 998]}, "items": [ {"name": "글루타치온", "pos": "중간 제일 윗줄"}, {"name": "코큐텐, 코엔자임큐텐", "pos": "중간 제일 아랫줄"}, {"name": "혈당, 혈행건강, 바나바", "pos": "초입 전체"}, {"name": "커큐민", "pos": "초입 위에서 2번째줄"}, {"name": "피크노제놀", "pos": "중간 3번째줄"}, {"name": "폴리코사놀, 레시틴, 솔잎추출물", "pos": "초입 밑에서 2번째줄"}, {"name": "삼백초, NMN", "pos": "중간 3번째줄"}, {"name": "콜라겐", "pos": "중간 3번째줄"}, {"name": "다이어트약", "pos": "중간 전체"}, {"name": "스펙트라 유두보호기", "pos": "제일 안쪽 제일 윗줄"}, {"name": "유축깔때기", "pos": "제일 안쪽 윗줄"}, {"name": "훼라민큐, 갱년기약", "pos": "안쪽 3번째줄"}, {"name": "임테기", "pos": "안쪽 위에서 2번째줄"}, {"name": "아시원정", "pos": "중간 밑에서 2번째줄"}, {"name": "아이미산", "pos": "중간 제일 아랫줄"}, {"name": "질세정제", "pos": "안쪽 제일 아랫줄"} ]},
+        { "name": "7. 오메가/혈행/마그네슘/수면", "coords": {"sw": [554, 702], "ne": [584, 1002]}, "items": [ {"name": "rTG/식물성/오메가3", "pos": "초입 전체"}, {"name": "대마종자유, 올리브유", "pos": "초입 윗줄"}, {"name": "마그네슘", "pos": "안쪽 전체"}, {"name": "마그비/스피드", "pos": "안쪽 아랫줄"}, {"name": "수면유도제, 슬리펠, 아론", "pos": "제일 안쪽 아랫줄"}, {"name": "기넥신, 은행엽, 이명", "pos": "중간 전체"}, {"name": "센시아", "pos": "중간 제일 아랫줄"}, {"name": "뉴베인, 당귀수산, 붓기약", "pos": "중간 위에서 2번째줄"}, {"name": "멜라토닌", "pos": "제일 안쪽 윗줄"} ]},
+        { "name": "8. 비타민C/두뇌/안정", "coords": {"sw": [621, 706], "ne": [651, 996]}, "items": [ {"name": "유한, 고려은단 vitC", "pos": "중간 밑에서 2번째줄"}, {"name": "레모나", "pos": "중간 제일 아랫줄"}, {"name": "발포비타민", "pos": "초입 밑에서 2번째줄"}, {"name": "뉴케어", "pos": "안쪽 중간"}, {"name": "MBP, 산양유단백질", "pos": "안쪽 윗줄"}, {"name": "아연", "pos": "중간 밑에서 2번째줄"}, {"name": "베타글루칸", "pos": "중간 3번째줄"}, {"name": "에키나포스, 이뮤골드", "pos": "중간 제일 윗줄"}, {"name": "포스파티딜세린, 치매예방", "pos": "안쪽 윗줄"}, {"name": "안정액, 천왕보심단", "pos": "제일 안쪽 제일 윗줄"}, {"name": "청심원", "pos": "제일 안쪽 아랫줄"}, {"name": "테아닌", "pos": "제일 안쪽 위에서 2번째줄"}, {"name": "마인트롤", "pos": "제일 안쪽 위에서 2번째줄"} ]},
+        { "name": "9. 뼈 관절/비타민B D", "coords": {"sw": [662, 706], "ne": [692, 996]}, "items": [ {"name": "로이코비, 큐업", "pos": "중간 제일 윗줄"}, {"name": "비맥스", "pos": "안쪽 밑에서 2번째줄"}, {"name": "메가트루", "pos": "안쪽 제일 아랫줄"}, {"name": "벤포벨", "pos": "제일 안쪽 제일 윗줄"}, {"name": "투엑스비", "pos": "제일 안쪽 중간"}, {"name": "임팩타민", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "콘드로이친, 콘드로이틴 맥스", "pos": "초입 전체"}, {"name": "MSM, 관절영양제", "pos": "초입 아랫줄"}, {"name": "칼슘, 칼마디, 비타민K", "pos": "중간 윗줄"}, {"name": "비타민D", "pos": "중간 아랫줄"} ]},
+        { "name": "10. 간/프리미엄보약", "coords": {"sw": [731, 698], "ne": [761, 998]}, "items": [ {"name": "우루사", "pos": "초입 제일 아랫줄"}, {"name": "밀크시슬", "pos": "초입 전체"}, {"name": "아르기닌", "pos": "중간 전체"}, {"name": "가네톡, 헤파포스", "pos": "중간 밑에서 2번째줄"}, {"name": "인태반, 자하거", "pos": "안쪽 중간"}, {"name": "알부민", "pos": "안쪽 전체"}, {"name": "홍삼", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "침향환", "pos": "제일 안쪽 제일 윗줄"}, {"name": "경옥고", "pos": "중간 윗줄"}, {"name": "아로나민", "pos": "제일 안쪽 중간"}, {"name": "삐콤", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "액티넘", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "센트룸, 센트롬", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "레날민", "pos": "제일 안쪽 밑에서 2번째줄"} ]},
+        { "name": "11. 눈건강/치약, 칫솔", "coords": {"sw": [772, 700], "ne": [802, 1000]}, "items": [ {"name": "루테인", "pos": "초입 전체"}, {"name": "일회용 인공눈물", "pos": "중간 전체"}, {"name": "아이드롭", "pos": "중간 3번째줄"}, {"name": "알러지, 충혈 안약", "pos": "중간 제일 윗줄"}, {"name": "안대", "pos": "안쪽 3번째줄"}, {"name": "치간칫솔, 치실", "pos": "제일 안쪽 윗줄"}, {"name": "잇치", "pos": "제일 안쪽 3번째줄"}, {"name": "파로돈탁스", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "가글", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "헥사메딘/탄툼", "pos": "카운터에 문의"}, {"name": "폴리덴트, 틀니세정제/접착제", "pos": "제일 안쪽 밑에서 2번째줄"} ]},
+        { "name": "12. 모발/남성/구강건강", "coords": {"sw": [835, 702], "ne": [865, 1002]}, "items": [ {"name": "판시딜캡슐", "pos": "초입 밑에서 2번째줄"}, {"name": "비오틴", "pos": "초입 제일 윗줄"}, {"name": "니조랄", "pos": "중간 밑에서 2번째줄"}, {"name": "두피앤, 두피나", "pos": "중간 밑에서 2번째줄"}, {"name": "미녹시딜, 로게인폼", "pos": "중간 윗줄"}, {"name": "쏘팔메토, 옥타코사놀", "pos": "안쪽 윗줄"}, {"name": "카리토포텐, 카리포텐", "pos": "안쪽 3번째줄"}, {"name": "잇몸약", "pos": "안쪽 전체"}, {"name": "인사돌/이가탄/이덴큐", "pos": "안쪽 제일 아랫줄"}, {"name": "오라메디/페리덱스", "pos": "제일 안쪽 3번째줄"}, {"name": "알보칠", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "아프니벤큐/구내염가글", "pos": "제일 안쪽 윗줄"} ]},
+        { "name": "13. 의료기기/염색약", "coords": {"sw": [874, 700], "ne": [904, 1000]}, "items": [ {"name": "혈압계", "pos": "중간 제일 윗줄"}, {"name": "혈당측정기", "pos": "초입 제일 윗줄"}, {"name": "체온계", "pos": "중간 위에서 2번째줄"}, {"name": "란셋", "pos": "초입 3번째줄"}, {"name": "인슐린주사기", "pos": "초입 밑에서 2번째줄"}, {"name": "나비침", "pos": "초입 제일 아랫줄"}, {"name": "알콜솜, 알콜스왑", "pos": "초입 3번째줄"}, {"name": "사혈침, 사혈기", "pos": "초입 3번째줄"}, {"name": "염색약/허브", "pos": "제일 안쪽 윗줄"}, {"name": "자가진단키트", "pos": "중간 위에서 2번째줄"}, {"name": "오라퀵", "pos": "중간 3번째줄"}, {"name": "비타센스, 금연초", "pos": "안쪽 위에서 2번째줄"}, {"name": "홍삼 은단", "pos": "안쪽 3번째줄"}, {"name": "목보호대", "pos": "중간 제일 윗줄"}, {"name": "복대", "pos": "중간 3번째줄"}, {"name": "니코레트", "pos": "안쪽 밑에서 2번째줄"}, {"name": "산소캔", "pos": "안쪽 3번째줄"}, {"name": "국소마취제, 리도카인", "pos": "안쪽 제일 윗줄"}, {"name": "콘돔, 러브젤", "pos": "안쪽 위에서 2번째줄"} ]},
+        { "name": "14. 보호대/마스크", "coords": {"sw": [963, 630], "ne": [993, 990]}, "items": [ {"name": "손목/무릎/허리/팔꿈치 보호대", "pos": "초입 전체"}, {"name": "KF94/덴탈 마스크", "pos": "제일 안쪽"}, {"name": "스포츠테이프, 키네시올로지", "pos": "안쪽 제일 아랫줄"} ]},
+        { "name": "15. 종합감기약/소염제/구충제", "coords": {"sw": [564, 511], "ne": [904, 551]}, "items": [ {"name": "판콜, 판피린", "pos": "중간 제일 아랫줄"}, {"name": "테라플루", "pos": "초입 밑에서 2번째줄"}, {"name": "타이레놀", "pos": "초입 제일 아랫줄"}, {"name": "모드콜", "pos": "초입 제일 윗줄"}, {"name": "갈근탕 파우치/과립", "pos": "중간 전체"}, {"name": "콜대원", "pos": "초입 3번째줄"}, {"name": "종합감기약, 몸살약", "pos": "초입 전체"}, {"name": "탁센", "pos": "초입 위에서 2번째줄"}, {"name": "이부프로펜", "pos": "중간 아랫줄"}, {"name": "이지엔6 이브/프로", "pos": "초입 제일 윗줄"}, {"name": "나프록센", "pos": "안쪽 윗줄"}, {"name": "애드빌, 사리돈", "pos": "안쪽 제일 아랫줄"}, {"name": "요비신, 방광염약", "pos": "안쪽 밑에서 2번째줄"}, {"name": "치통, 치주염, 치은염약", "pos": "안쪽 밑에서 2번째줄"}, {"name": "편두통약", "pos": "안쪽 제일 윗줄"}, {"name": "근이완제, 근육통약", "pos": "제일 안쪽 제일 윗줄"}, {"name": "작약감초탕", "pos": "제일 안쪽 3번째줄"}, {"name": "신경비타민, 맥타", "pos": "제일 안쪽 3번째줄"}, {"name": "구충제, 알벤다졸", "pos": "제일 안쪽 제일 아랫줄"} ]},
+        { "name": "16. 비염/코감기/목감기", "coords": {"sw": [565, 454], "ne": [905, 494]}, "items": [ {"name": "스트렙실, 모가프텐", "pos": "중간 제일 아랫줄"}, {"name": "베타딘/목앤/탄툼 스프레이", "pos": "중간 3번째줄"}, {"name": "오트리빈/코앤쿨", "pos": "안쪽 3번째줄"}, {"name": "지르텍", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "알레그라", "pos": "제일 안쪽 제일 윗줄"}, {"name": "용각산", "pos": "중간 제일 아랫줄"}, {"name": "액티피드, 알비코, 코스펜 ", "pos": "카운터에 문의"}, {"name": "콘택", "pos": "중간 제일 아랫줄"}, {"name": "기침, 목감기약", "pos": "초입 전체"}, {"name": "콧물, 코감기약", "pos": "안쪽 전체"}, {"name": "비염약", "pos": "제일 안쪽 전체"} ]},
+        { "name": "17. 위장건강/변비/설사/치질", "coords": {"sw": [562, 356], "ne": [902, 396]}, "items": [ {"name": "소화제", "pos": "초입 전체"}, {"name": "베아제", "pos": "초입 제일 아랫줄"}, {"name": "훼스탈", "pos": "초입 제일윗줄/제일아랫줄"}, {"name": "개비스콘/알마겔", "pos": "초입 제일 아랫줄"}, {"name": "겔포스", "pos": "초입 밑에서 2번째줄"}, {"name": "카베진", "pos": "중간 제일 윗줄"}, {"name": "마그밀", "pos": "중간 제일 아랫줄"}, {"name": "둘코락스", "pos": "안쪽 3번째줄"}, {"name": "메이킨", "pos": "안쪽 밑에서 2번째줄"}, {"name": "푸룬주스", "pos": "안쪽 제일 아랫줄"}, {"name": "관장약", "pos": "중간 제일 아랫줄"}, {"name": "정로환", "pos": "안쪽 제일 아랫줄"}, {"name": "카무트효소", "pos": "중간 위에서 2번째줄"}, {"name": "매스틱검", "pos": "중간 3번째줄"}, {"name": "푸레파인", "pos": "안쪽 3번째줄"}, {"name": "치센,디오스민,치질약", "pos": "안쪽 윗줄"}, {"name": "졸음껌", "pos": "제일 안쪽 제일 윗줄"}, {"name": "지사제", "pos": "안쪽 아랫줄"}, {"name": "여행상비약세트", "pos": "안쪽 위에서 2번째줄"}, {"name": "멀미약/노량/보나링", "pos": "제일 안쪽 제일 아랫줄"} ]},
+        { "name": "18. 연고/버물리/무좀/멍/화상/티눈", "coords": {"sw": [565, 304], "ne": [905, 344]}, "items": [ {"name": "유리아/반질", "pos": "초입 밑에서 2번째줄"}, {"name": "후시딘", "pos": "중간 제일 아랫줄"}, {"name": "마데카솔 연고/겔", "pos": "초입 제일 아랫줄"}, {"name": "쎄레스톤지, 세레스톤지", "pos": "안쪽 제일 아랫줄"}, {"name": "멍크림/타박상연고", "pos": "초입 제일 윗줄"}, {"name": "화상연고", "pos": "초입 위에서 2번째줄"}, {"name": "베아로반/에스로반", "pos": "초입 밑에서 2번째줄"}, {"name": "히드로코티손/더마큐", "pos": "안쪽 위에서 2번째줄"}, {"name": "비판텐", "pos": "안쪽 제일 아랫줄"}, {"name": "D판테놀", "pos": "안쪽 제일 윗줄"}, {"name": "써버쿨", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "모기기피제", "pos": "제일 안쪽 밑에서 2번째줄"}, {"name": "라미실", "pos": "중간 제일아랫줄"}, {"name": "무좀연고", "pos": "중간 전체"}, {"name": "발톱무좀약", "pos": "중간 제일 윗줄"}, {"name": "풀케어", "pos": "제일 안쪽 제일 아랫줄"} ]},
+        { "name": "19. 여드름/얼굴케어/입술케어", "coords": {"sw": [556, 210], "ne": [906, 250]}, "items": [ {"name": "고운발", "pos": "초입 제일 아랫줄"}, {"name": "썬크림", "pos": "초입 제일 아랫줄"}, {"name": "알로에베라", "pos": "초입 밑에서 2번째줄"}, {"name": "PDRN/EGF/재생연고", "pos": "초입 전체"}, {"name": "리쥬비넥스", "pos": "초입 위에서 2번째줄"}, {"name": "마데카화장품", "pos": "초입 아랫줄"}, {"name": "애크논", "pos": "중간 위에서 2번째줄"}, {"name": "애크린", "pos": "중간 3번째줄"}, {"name": "노스카나", "pos": "중간 제일 윗줄"}, {"name": "아젤리아", "pos": "중간 3번째줄"}, {"name": "파티마겔", "pos": "중간 위에서 2번째줄"}, {"name": "멜라토닝, 도미나", "pos": "중간 제일 윗줄"}, {"name": "아시클로버, 바이버", "pos": "안쪽 제일 윗줄"}, {"name": "큐립", "pos": "안쪽 위에서 2번째줄"}, {"name": "립밤", "pos": "제일 안쪽 아랫줄"}, {"name": "바세린", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "여드름패치", "pos": "제일 안쪽 전체"} ]},
+        { "name": "20. 습윤밴드/밴드", "coords": {"sw": [557, 154], "ne": [907, 194]}, "items": [ {"name": "습윤드레싱/메디폼", "pos": "제일 안쪽 전부"}, {"name": "듀오덤", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "메피폼", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "방수/드레싱밴드", "pos": "기둥 넘자마자 바로"}, {"name": "화상밴드", "pos": "중간 윗줄"}, {"name": "마데카밴드", "pos": "중간 위에서 2번째줄"}, {"name": "대일밴드/케어리브", "pos": "초입 전부"} ]},
+        { "name": "21. 소독약/연고/반창고", "coords": {"sw": [454, 18], "ne": [894, 68]}, "items": [ {"name": "맥스포스", "pos": "초입 윗줄"}, {"name": "에프킬라/홈키파", "pos": "초입 아랫줄"}, {"name": "홈매트", "pos": "초입 윗줄"}, {"name": "과산화수소", "pos": "제일안쪽 제일 아랫줄"}, {"name": "포비돈/빨간약", "pos": "제일안쪽 3번째줄"}, {"name": "일회용 소독약 면봉", "pos": "안쪽 3번째줄"}, {"name": "에탄올", "pos": "중간 제일 아랫줄"}, {"name": "거즈", "pos": "중간 밑에서 2번째줄"}, {"name": "종이테이프", "pos": "중간 위에서 2번째줄"}, {"name": "생리식염수", "pos": "중간 제일 아랫줄 주황뚜껑"}, {"name": "멸균증류수", "pos": "중간 제일 아랫줄 민트뚜껑"}, {"name": "골무", "pos": "중간 밑에서 2번째줄"}, {"name": "핀셋", "pos": "안쪽 3번째줄"}, {"name": "코반/자가점착테이프", "pos": "안쪽 밑에서 2번째줄"}, {"name": "압박/탄력붕대", "pos": "중간 밑에서 2번째줄"}, {"name": "붕사/붕산/명반/백반", "pos": "제일 안쪽 제일 아랫줄"}, {"name": "성인용 기저귀/패드", "pos": "제일 안쪽 전체"} ]},
+        { "name": "22. 각종 파스류", "coords": {"sw": [955, 156], "ne": [995, 526]}, "items": [ {"name": "케토톱", "pos": "제일 오른쪽 제일 아랫줄"}, {"name": "안티푸라민연고", "pos": "왼쪽 제일 아랫줄"}, {"name": "손흥민파스", "pos": "오른쪽 밑에서 2번째줄"}, {"name": "아렉스", "pos": "중간 제일 아랫줄"}, {"name": "동전파스", "pos": "왼쪽 3번째줄"}, {"name": "신신파스", "pos": "중간 제일 아랫줄"}, {"name": "스프레이/에어파스", "pos": "제일 왼쪽 제일 윗줄"}, {"name": "맨소래담", "pos": "제일 왼쪽 제일 아랫줄"} ]},
+        { "name": "유산균 구역", "coords": {"sw": [15, 467], "ne": [65, 717]}, "items": [ {"name": "듀오락 골드", "pos": "오른쪽 제일 윗줄"}, {"name": "질유산균", "pos": "왼쪽 밑에서 2번째줄"}, {"name": "락토핏", "pos": "제일 왼쪽 제일 아랫줄"}, {"name": "비에날씬", "pos": "왼쪽 제일 윗줄"}, {"name": "낙산균", "pos": "왼쪽 위에서 2번째줄"}, {"name": "셀티아이/키즈", "pos": "중간 전체"}, {"name": "구강유산균", "pos": "왼쪽 세번째줄"} ]},
+        { "name": "냉장 음료수", "coords": {"sw": [10, 728], "ne": [60, 968]}, "items": [ {"name": "프리미엄 레시피", "pos": "왼쪽 제일 윗줄"}, {"name": "여명", "pos": "오른쪽 제일 윗줄"}, {"name": "비배드", "pos": "오른쪽 3번째줄"} ]},
+        { "name": "소화/숙취 ", "coords": {"sw": [504, 312], "ne": [544, 402]}, "items": [ {"name": "알디콤", "pos": "중간매대 밑에서 2번째줄"}, {"name": "상쾌환", "pos": "중간매대 제일 아랫줄"}, {"name": "숙취해소제 세트", "pos": "중간매대 3번째줄"}, {"name": "RU21", "pos": "중간매대 밑에서 2번째줄"}, {"name": "취어스", "pos": "중간매대 밑에서 2번째줄"} ]},
+        { "name": "공진단", "coords": {"sw": [507, 459], "ne": [547, 549]}, "items": [ {"name": "공진단 환/액", "pos": "중간매대 전체"} ]},
+        { "name": "피로회복제", "coords": {"sw": [522, 636], "ne": [572, 696]}, "items": [ {"name": "마그비스피드", "pos": "중간매대 3번째줄"}, {"name": "피로회복제 세트", "pos": "중간매대 밑에서 2번째줄"}, {"name": "카페인", "pos": "중간매대 왼쪽 위에서 2번째줄"} ]},
+        { "name": "이달의 상품", "coords": {"sw": [414, 636], "ne": [474, 696]}, "items": [ {"name": "에키나포스", "pos": "중간매대 제일 윗줄"}, {"name": "마시는리쥬란", "pos": "중간매대 밑에서 2번째줄"}, {"name": "아임비타", "pos": "중간매대 제일 아랫줄"}, {"name": "여행세트", "pos": "중간매대 3번째줄"}, {"name": "붓기세트", "pos": "중간매대 밑에서 2번째줄"}, {"name": "프로폴리스", "pos": "중간매대 위에서 2번째줄"} ]},
+        { "name": "2. 어린이건강", "coords": {"sw": [288, 701], "ne": [328, 1001]}, "items": [ {"name": "챔프, 챔큐", "pos": "초입 3번째줄"}, {"name": "콜대원키즈", "pos": "초입 위에서2번째줄"}, {"name": "부루펜, 맥시부펜시럽", "pos": "중간 위에서 2번째줄"}, {"name": "해열제", "pos": "중간 위1~2줄"}, {"name": "백초, 베나치오키즈, 꼬마활명수", "pos": "초입 제일 윗줄"}, {"name": "유아마스크", "pos": "제일 안쪽 윗줄"}, {"name": "열패치", "pos": "안쪽 제일 윗줄"}, {"name": "베베클, 피지오머", "pos": "안쪽 3번째줄"}, {"name": "코뻥", "pos": "안쪽 위에서 2번째줄"}, {"name": "칼라민, 카네스텐, 베이비파우더", "pos": "중간 3번째줄"}, {"name": "어린이멀미약, 캐릭터밴드", "pos": "초입 밑에서 2번째줄"} ]}
+    ];
+
+    var map = L.map('map', { crs: L.CRS.Simple, minZoom: -1, maxZoom: 2 });
+    var bounds = [[0, 0], [1000, 1000]];
+    L.imageOverlay('map.jpg', bounds).addTo(map);
+    map.fitBounds(bounds);
+
+    var layers = [];
+
+    function clearPopups() {
+        map.eachLayer(function(layer) { if (layer instanceof L.Popup) map.removeLayer(layer); });
+    }
+
+    function showCategoryList(data, latlng) {
+        clearPopups();
+        var gridHtml = `<div class="popup-header">${data.name}</div><div class="med-grid">`;
+        data.items.forEach((item) => {
+            gridHtml += `<div class="med-item" onclick="showMedDetail('${item.name}', '${item.pos}', [${latlng.lat}, ${latlng.lng}], '${data.name}')">${item.name}</div>`;
+        });
+        gridHtml += `</div>`;
+        L.popup().setLatLng(latlng).setContent(gridHtml).openOn(map);
+    }
+
+    // [완벽 복구] 노란 박스 안에 위치 + 구역 정보 모두 포함
+    window.showMedDetail = function(itemName, itemPos, latlngArr, catName) {
+        clearPopups();
+        var detailHtml = `
+            <div class="popup-header">세부 위치 안내</div>
+            <div class="detail-view">
+                <div class="detail-name">${itemName}</div>
+                <div class="detail-pos">
+                    📍 ${itemPos}<br>
+                    <span class="detail-cat-info">(${catName} 구역)</span>
+                </div>
+                <div class="btn-back" onclick="reopenCat('${catName}', [${latlngArr[0]}, ${latlngArr[1]}])">◀ 목록으로 돌아가기</div>
+            </div>`;
+        L.popup({ autoClose: false }).setLatLng(latlngArr).setContent(detailHtml).openOn(map);
+    };
+
+    window.reopenCat = function(catName, latlngArr) {
+        var data = pharmacyData.find(d => d.name === catName);
+        showCategoryList(data, {lat: latlngArr[0], lng: latlngArr[1]});
+    };
+
+    pharmacyData.forEach(function(d) {
+        var rect = L.rectangle([d.coords.sw, d.coords.ne], { color: '#007bff', weight: 1, fillOpacity: 0.1 }).addTo(map);
+        rect.on('click', function(e) { showCategoryList(d, e.latlng); });
+        layers.push({ rect: rect, data: d });
+    });
+
+    window.executeSearch = function() {
+        var q = document.getElementById('search').value.toLowerCase().trim();
+        clearPopups();
+        layers.forEach(obj => obj.rect.setStyle({ color: '#007bff', fillOpacity: 0.1, weight: 1 }));
+        if (q === "") return;
+
+        var firstMatch = null;
+        layers.forEach(function(obj) {
+            var match = obj.data.items.find(it => it.name.toLowerCase().includes(q));
+            if (match) {
+                obj.rect.setStyle({ color: 'red', fillOpacity: 0.3, weight: 2 });
+                if (!firstMatch) firstMatch = { item: match, layer: obj };
+            }
+        });
+
+        if (firstMatch) {
+            var target = firstMatch.layer;
+            map.flyToBounds(target.rect.getBounds(), { padding: [100, 100] });
+            // 검색 시에도 동일한 노란 박스 UI 적용
+            var detailHtml = `
+                <div class="popup-header">검색 결과</div>
+                <div class="detail-view">
+                    <div class="detail-name">${firstMatch.item.name}</div>
+                    <div class="detail-pos">
+                        📍 ${firstMatch.item.pos}<br>
+                        <span class="detail-cat-info">(${target.data.name} 구역)</span>
+                    </div>
+                </div>`;
+            L.popup().setLatLng(target.rect.getBounds().getCenter()).setContent(detailHtml).openOn(map);
+        }
+    };
+</script>
+</body>
+</html>
